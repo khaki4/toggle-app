@@ -1,24 +1,85 @@
 import React from 'react';
-import logo from './logo.svg';
-import './App.css';
+import { Machine, assign } from 'xstate';
+import { useMachine } from '@xstate/react';
+
+const allData = Array.from(new Array(20), (_, i) => i + 1);
+const perPage = 5;
+
+const dataMachine = new Machine({
+  id: "dataMachine",
+  initial: "loading",
+  context: {
+    data: []
+  },
+  states: {
+    loading: {
+      invoke: {
+        id: "dataLoader",
+        src: (context, _event) => {
+          return (callback, _onEvent) => {
+            setTimeout(() => {
+              const { data } = context;
+              const newData = allData.slice(data.length, data.length + perPage);
+              const hasMore = newData.length === perPage;
+              if (hasMore) {
+                callback({ type: "DONE_MORE", newData });
+              } else {
+                callback({ type: "DONE_COMPLETE", newData });
+              }
+            }, 1000);
+          };
+        }
+      },
+      on: {
+        DONE_MORE: {
+          target: "more",
+          actions: assign({
+            data: ({ data }, { newData = [] }) => [...data, ...newData]
+          })
+        },
+        DONE_COMPLETE: {
+          target: "complete",
+          actions: assign({
+            data: ({ data }, { newData = [] }) => [...data, ...newData]
+          })
+        },
+        FAIL: "failure"
+      }
+    },
+    more: {
+      on: {
+        LOAD: "loading"
+      }
+    },
+    complete: { type: "final" },
+    failure: { type: "final" }
+  }
+});
 
 function App() {
+  const [current, send] = useMachine(dataMachine);
+  const { data } = current.context;
   return (
     <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
+      <ul>
+        {data.map(row => (
+          <li key={row} style={{ background: "orange" }}>
+            {row}
+          </li>
+        ))}
+        {current.matches("loading") && <li>Loading...</li>}
+        {current.matches("more") && (
+          <li style={{ background: "green" }}>
+            <button
+              onClick={() => {
+                send("LOAD");
+              }}
+            >
+              Load More
+  </button>
+          </li>
+        )}
+      </ul>
     </div>
   );
 }
